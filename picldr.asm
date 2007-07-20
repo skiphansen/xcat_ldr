@@ -18,10 +18,16 @@
 ; The latest version of this program may be found at
 ; http://openflash.sourceforge.net
 ;
-; $Header: /home/skip/CVSROOT/picldr/picldr.asm,v 1.1 2004/05/01 16:55:19 Skip Exp $
+; $Header: /home/skip/CVSROOT/picldr/picldr.asm,v 1.2 2007/07/20 23:17:07 Skip Exp $
 ; $Log: picldr.asm,v $
-; Revision 1.1  2004/05/01 16:55:19  Skip
-; Initial revision
+; Revision 1.2  2007/07/20 23:17:07  Skip
+; Programmed into last set of Xcat boards 7/20/07 w/ Rev 0.27 firmware:
+; 1. Added (untested) support for 3.58 clock.
+; 2. Fixed assembly for non-A series parts (not tested).
+; 3. Added clrwdt to polling loops so watchdog can be enabled.
+;
+; Revision 1.1.1.1  2004/05/01 16:55:19  Skip
+; Initial import.
 ;
 ;
 ;Simple Intel hex loader/programmer.
@@ -65,6 +71,7 @@
         processor       16F873
         include <p16f873.inc>
 #define MAX_FLASH_ADR   H'0fff'
+        __config  _HS_OSC & _BODEN_ON & _CP_OFF & _PWRTE_ON & _WDT_ON & _LVP_OFF
         endif
         
         IFDEF __16F877A
@@ -72,15 +79,20 @@
         include <p16f877a.inc>
 #define MAX_FLASH_ADR   H'1fff'
 #define SUFFIX_A_PART   1
+        __config  _HS_OSC & _BODEN_ON & _CP_ALL & _PWRTE_ON & _WDT_ON & _LVP_OFF
         endif
         
         ERRORLEVEL -302 ;remove messages about using proper bank
-        __config  _HS_OSC & _BODEN_ON & _CP_OFF & _PWRTE_ON & _WDT_OFF & _LVP_OFF
 
 ;#define         SIMULATE
 
+#define CLK_20MHZ
+;#define CLK_3_58MHZ
+
 
         ifndef SIMULATE
+        
+        ifdef CLK_20MHZ        
 ;The following software timing loop constants assume a 20 Mhz clock
 ;adjust as needed for your actual clock.  Actual delay is not critical
 ;along as TIME_CONSTANT1, TIME_CONSTANT2 is long enough to ensure that
@@ -93,6 +105,18 @@
 
 #define         TIME_CONSTANT3  0x80
 #define         TIME_CONSTANT4  2
+        endif
+
+        ifdef CLK_3_58MHZ
+;The following software timing loop constants assume a 3.58 Mhz clock
+        
+#define         TIME_CONSTANT1  0x75
+#define         TIME_CONSTANT2  1
+
+#define         TIME_CONSTANT3  0x46
+#define         TIME_CONSTANT4  1
+        endif
+        
         else
 ;dummy time constants to make use of the simulator less frustrating
 #define         TIME_CONSTANT1  1
@@ -123,13 +147,11 @@ delay           res     1
 delay1          res     1
 delay2          res     1
 
-        ifdef   SUFFIX_A_PART
 SHARED  udata
 chkdata         res     1       ;
 chkdatah        res     1       ;
 adr_msb         res     1
 adr_lsb         res     1
-        endif
 
 
 STARTUP code
@@ -138,7 +160,8 @@ STARTUP code
 PROG1   code
 
 ;get a character from the serial port
-getch   btfss   PIR1,RCIF       ;
+getch   clrwdt                  ;
+        btfss   PIR1,RCIF       ;
         ifndef SIMULATE
         goto    getch           ;
         else
@@ -180,9 +203,17 @@ gethex  call    getnibble       ;
         return                  ;
 
 startup
-        ;initialize uart for 19,200, 8 data bits, no parity
         BSF     STATUS,RP0      ;Bank 1
+        
+        ifdef CLK_3_58MHZ
+        ;initialize uart for 9600, 8 data bits, no parity
+        movlw   d'22'           ;9600 divider, 3.58 Mhz clock, BRGH = 1
+        endif
+        ifdef CLK_20MHZ        
+        ;initialize uart for 19,200, 8 data bits, no parity
         movlw   d'64'           ;19200 divider, 20 Mhz clock, BRGH = 1
+        endif
+        
         movwf   SPBRG
         
         BCF     STATUS,RP0      ;Bank 0
@@ -203,6 +234,7 @@ startup
         movwf   delay2          ;
 podelay decfsz  delay,f         ;
         goto    podelay         ;
+        clrwdt                  ;
         decfsz  delay1,f        ;
         goto    podelay         ;
         decfsz  delay2,f        ;
@@ -229,6 +261,7 @@ podelay1
         goto    2               ;(hopefully the app has programmed a jump here!)
         decfsz  delay,f         ;
         goto    podelay1        ;
+        clrwdt                  ;
         decfsz  delay1,f        ;
         goto    podelay1        ;
         decfsz  delay2,f        ;
@@ -396,6 +429,7 @@ noendpad
         movwf   response        ;
         call    setupadr
 prg_loop
+        clrwdt                  ;
         movf    INDF,w          ;
         movwf   chkdata         ;save lsb
         incf    FSR,f           ;
@@ -452,6 +486,7 @@ bad_adr
 sendchar
         bsf     STATUS,RP0      ;bank 1
 sendwait
+        clrwdt                  ;
         btfss   TXSTA,TRMT      ;
         goto    sendwait        ;
         bcf     STATUS,RP0      ;bank 0
