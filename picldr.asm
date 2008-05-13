@@ -18,8 +18,15 @@
 ; The latest version of this program may be found at
 ; http://openflash.sourceforge.net
 ;
-; $Header: /home/skip/CVSROOT/picldr/picldr.asm,v 1.2 2007/07/20 23:17:07 Skip Exp $
+; $Header: /home/skip/CVSROOT/picldr/picldr.asm,v 1.3 2008/05/13 15:47:02 Skip Exp $
 ; $Log: picldr.asm,v $
+; Revision 1.3  2008/05/13 15:47:02  Skip
+; 1. Added ICD_FRIENDLY define to allow loader to be compiled for use under
+;    the ICD.
+; 2. Added a NOP @ 0 and moved start jump to 1 for compatibility with the ICD.
+; 3. Added code to copy the STATUS register to 0x7f immediately after reset
+;    so the application and determine the cause of the reset for debugging.
+;
 ; Revision 1.2  2007/07/20 23:17:07  Skip
 ; Programmed into last set of Xcat boards 7/20/07 w/ Rev 0.27 firmware:
 ; 1. Added (untested) support for 3.58 clock.
@@ -67,6 +74,9 @@
 ;       4: extended linear address record
 ;       5: start linear address record
 ;
+
+;#define ICD_FRIENDLY
+
         IFDEF __16F873
         processor       16F873
         include <p16f873.inc>
@@ -79,8 +89,14 @@
         include <p16f877a.inc>
 #define MAX_FLASH_ADR   H'1fff'
 #define SUFFIX_A_PART   1
+        ifdef ICD_FRIENDLY
+        __config  _HS_OSC & _BODEN_ON & _CP_OFF & _PWRTE_ON & _WDT_OFF & _LVP_OFF & _DEBUG_ON
+        else
         __config  _HS_OSC & _BODEN_ON & _CP_ALL & _PWRTE_ON & _WDT_ON & _LVP_OFF
         endif
+        endif
+
+#define APP_START_JUMP  2
         
         ERRORLEVEL -302 ;remove messages about using proper bank
 
@@ -155,6 +171,7 @@ adr_lsb         res     1
 
 
 STARTUP code
+        nop                     ;be ICD friendly
         goto    startup
 
 PROG1   code
@@ -204,6 +221,8 @@ gethex  call    getnibble       ;
 
 startup
         BSF     STATUS,RP0      ;Bank 1
+        movf    STATUS,w        ;Save STATUS for app (to detect WD timeouts)
+        movwf   0x7f            ;
         
         ifdef CLK_3_58MHZ
         ;initialize uart for 9600, 8 data bits, no parity
@@ -245,7 +264,7 @@ podelay decfsz  delay,f         ;
         ;application code, otherwise 
         
         btfsc   PORTC,7         ;UART input in a SPACE ?
-        goto    2               ;(hopefully the app has programmed a jump here!)
+        goto    APP_START_JUMP  ;(hopefully the app has programmed a jump here!)
         
         ;watch the RxD input pin for about 100 milliseconds, if it stays in
         ;a SPACE state for the entire 100 milliseconds then enter the loader,
@@ -258,7 +277,7 @@ podelay decfsz  delay,f         ;
         movwf   delay2          ;
 podelay1
         btfsc   PORTC,7         ;UART input in a SPACE ?
-        goto    2               ;(hopefully the app has programmed a jump here!)
+        goto    APP_START_JUMP  ;(hopefully the app has programmed a jump here!)
         decfsz  delay,f         ;
         goto    podelay1        ;
         clrwdt                  ;
@@ -287,7 +306,7 @@ hex0    call    getch           ;
         movlw   'F'             ;finished ?
         subwf   response,w      ;
         btfsc   STATUS,Z        ;
-        goto    2               ;(hopefully the app has programmed a jump here!)
+        goto    APP_START_JUMP  ;(hopefully the app has programmed a jump here!)
         goto    hex0            ;keep waiting
         
 hex3    movlw   ':'
