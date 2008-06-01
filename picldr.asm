@@ -18,8 +18,11 @@
 ; The latest version of this program may be found at
 ; http://openflash.sourceforge.net
 ;
-; $Header: /home/skip/CVSROOT/picldr/picldr.asm,v 1.3 2008/05/13 15:47:02 Skip Exp $
+; $Header: /home/skip/CVSROOT/picldr/picldr.asm,v 1.4 2008/06/01 14:39:11 Skip Exp $
 ; $Log: picldr.asm,v $
+; Revision 1.4  2008/06/01 14:39:11  Skip
+; Added version number byte @ 0x11 absolute.
+;
 ; Revision 1.3  2008/05/13 15:47:02  Skip
 ; 1. Added ICD_FRIENDLY define to allow loader to be compiled for use under
 ;    the ICD.
@@ -175,6 +178,15 @@ STARTUP code
         goto    startup
 
 PROG1   code
+
+;loader version number.  This was added in Revision 1.4, prior versions had
+;       1.1 - 0x1e8c ("btfss   PIR1,RCIF")
+;       1.2 - 0x0064 ("clrwdt")
+;       1.3 - 0x0064 ("clrwdt") but it was never shipped to anyone
+;       1.4 ...  version number, bcd
+;this is at code address 0x11
+        data    0x4             ;V 0.4
+
 
 ;get a character from the serial port
 getch   clrwdt                  ;
