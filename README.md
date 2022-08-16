@@ -6,6 +6,16 @@ https://github.com/skiphansen/xcat_ldr
 
 ## What is this?
 
+The Xcat was a PIC based device that replaced the Motorola Syntor X radios
+"code plug" to provide frequency agility for Ham radio operators.
+
+For more information about Xcats visit the Xcat group on [groups.io](https://groups.io/g/xcat)
+
+The project consists of
+- [Xcat PC control program](https://github.com/skiphansen/xcat_pc)
+- [Xcat firmware](https://github.com/skiphansen/xcat_fw)
+- [Xcat booloader](https://github.com/skiphansen/xcat_ldr)
+
 This the bootloader that was used on the PIC16F877A based Xcat Syntor X code 
 plug replacement project.
 
